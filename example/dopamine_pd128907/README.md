@@ -25,11 +25,13 @@ Hydrophobe `Br` grey · DonorProj `F` · AcceptorProj `I` · AromaticProj `B`.
 
 ## Scores (this machine, ETKDGv3 + MMFF, seed 0xF00D)
 
+`overlay_projected.py` — 25 dopamine query confs (best reported), 100 PD128907 dataset confs:
+
 | colour model | shape | colour | combo |
 |---|---|---|---|
-| stock (1 pt/feature) | 0.627 | 0.478 | 0.552 |
-| base + projected pts | 0.634 | 0.355 | 0.494 |
-| projected pts only   | 0.618 | 0.280 | 0.449 |
+| stock (1 pt/feature) | 0.633 | 0.500 | 0.566 |
+| base + projected pts | 0.639 | 0.411 | 0.525 |
+| projected pts only   | 0.606 | 0.377 | 0.492 |
 
 Projected points lower the colour Tanimoto because the two molecules only
 partly agree on feature *direction*, not just position.
