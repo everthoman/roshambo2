@@ -106,21 +106,24 @@ with open("overlay_projected.pml", "w") as fh:
         "load ligand_PD128907_proj.sdf, PD128907\n"
         "hide everything, dopamine or PD128907\n"
         "show sticks, dopamine or PD128907\n"
+        "set stick_radius, 0.12, dopamine or PD128907\n"
         "util.cbac dopamine\nutil.cbag PD128907\n\n"
         f"load {feats_sdf}, feats\n"
         "set all_states, on\n"
+        "unbond feats, feats\n"                     # kill spurious pseudo-atom bonds
         "hide everything, feats\nshow spheres, feats\n"
-        "set sphere_scale, 0.35, feats\nset sphere_transparency, 0.25, feats\n"
+        "set sphere_scale, 0.3, feats\nset sphere_transparency, 0.4, feats\n"
         "color slate,     feats and elem N\n"       # Donor
         "color firebrick, feats and elem O\n"       # Acceptor
         "color orange,    feats and elem Fe\n"      # PosIonizable
         "color green,     feats and elem Cl\n"      # NegIonizable
         "color yellow,    feats and elem S\n"       # Aromatic
-        "color grey60,    feats and elem Br\n"      # Hydrophobe
+        "color grey70,    feats and elem Br\n"      # Hydrophobe
         "color deepblue,  feats and elem F\n"       # DonorProj
-        "color red,       feats and elem I\n"       # AcceptorProj
+        "color hotpink,   feats and elem I\n"       # AcceptorProj
         "color wheat,     feats and elem B\n"       # AromaticProj
-        "set sphere_scale, 0.5, feats and elem Fe\n"
-        "bg_color white\nset orthoscopic, 1\nzoom all, 3\n"
+        "set sphere_scale, 0.45, feats and elem Fe\n"
+        "set sphere_transparency, 0.1, feats and (elem Fe or elem F or elem I or elem B)\n"
+        "bg_color white\nset orthoscopic, 1\nset ray_shadows, 0\norient\nzoom all, 2\n"
     )
 print(f"\nwrote {hits_sdf}, {feats_sdf} and overlay_projected.pml")
