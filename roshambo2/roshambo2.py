@@ -411,7 +411,10 @@ class Roshambo2():
             raise ValueError("Cannot compute color scores with input that was not prepared with color")
 
         if self.color:
-            self.color_generator =  PharmacophoreGenerator()
+            # keep a user-supplied color_generator (e.g. custom families / projected
+            # points); only fall back to the default when none was given
+            if self.color_generator is None:
+                self.color_generator = PharmacophoreGenerator()
         else:
             self.color_generator = None
 
