@@ -30,24 +30,25 @@ Hydrophobe `Br` grey · DonorProj `F` · AcceptorProj `I` · AromaticProj `B`.
 | colour model | shape | colour | combo |
 |---|---|---|---|
 | stock (1 pt/feature) | 0.633 | 0.500 | 0.566 |
-| base + projected pts | 0.639 | 0.411 | 0.525 |
-| projected pts only   | 0.606 | 0.377 | 0.492 |
+| base + projected pts | 0.656 | 0.360 | 0.508 |
+| projected pts only   | 0.503 | 0.512 | 0.507 |
 
-Projected points lower the colour Tanimoto because the two molecules only
-partly agree on feature *direction*, not just position.
+Projected points lower the *combined* colour Tanimoto because the two molecules
+only partly agree on feature *direction*, not just position — and "projected
+only" will trade shape for a much better directional colour match.
 
 ### Conformer count (`conf_scan.py`, base+projected model)
 
 | dopamine confs | PD128907 confs | shape | colour | combo |
 |---|---|---|---|---|
-| 1  | 20  | 0.634 | 0.355 | 0.494 |
-| 1  | 100 | 0.620 | 0.397 | 0.508 |
-| 25 | 100 | 0.639 | 0.411 | 0.525 |
-| 25 | 400 | 0.639 | 0.419 | 0.529 |
+| 1  | 20  | 0.625 | 0.337 | 0.481 |
+| 1  | 100 | 0.644 | 0.346 | 0.495 |
+| 25 | 100 | 0.656 | 0.360 | 0.508 |
+| 25 | 400 | 0.642 | 0.391 | 0.516 |
 
 PD128907 is rigid, so its dataset confs saturate by ~100. Dopamine is the
 flexible partner — sampling its query conformers (→25) is what actually moves
-the score. Plateau ~(25, 100); combo 0.49 → 0.53.
+the score. Plateau ~(25, 100).
 
 ## Note
 

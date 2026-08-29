@@ -6,8 +6,11 @@ This generator adds ROCS-style **projected points**:
 
   * Donor    -> one point `donor_dist` A out along each D-H bond
                (roughly where the acceptor would sit)
-  * Acceptor -> one point `acceptor_dist` A out along the mean lone-pair
-               direction (away from the bonded heavy atoms)
+  * Acceptor -> points `acceptor_dist` A out along the lone-pair directions
+               (see _acceptor_lone_pairs): two tetrahedral lone pairs for
+               hydroxyl / ether O (out of the C-O-C plane, NOT coplanar with
+               the substituents), two sp2 lone pairs at +/-120 deg for a
+               carbonyl O / nitrile N
   * Aromatic -> two points `ring_dist` A above / below the ring plane
                along the ring normal
 
@@ -37,6 +40,58 @@ from roshambo2.pharmacophore import RDKitPharmacophoreGenerator
 
 _BASE = ("Donor", "Acceptor", "PosIonizable", "NegIonizable", "Aromatic", "Hydrophobe")
 _PROJ = ("DonorProj", "AcceptorProj", "AromaticProj")
+
+_TET_HALF = np.deg2rad(54.75)   # half the tetrahedral angle (109.47/2)
+
+
+def _unit(v):
+    n = np.linalg.norm(v)
+    return v / n if n > 1e-6 else None
+
+
+def _rotate(v, axis, ang):
+    """Rodrigues rotation of v about unit `axis` by `ang` radians."""
+    c, s = np.cos(ang), np.sin(ang)
+    return v * c + np.cross(axis, v) * s + axis * np.dot(axis, v) * (1 - c)
+
+
+def _acceptor_lone_pairs(a, xyz):
+    """Unit vectors pointing from acceptor atom `a` along its lone pairs.
+
+    Uses *all* neighbours (incl. explicit H) so the geometry is right for
+    hydroxyl / ether / carbonyl oxygens and imine / aromatic nitrogens:
+      - 2+ neighbours (sp3 O, ether, hydroxyl): two lone pairs straddling the
+        plane that bisects the X-A-Y angle, tilted out of the X-A-Y plane by
+        the tetrahedral half-angle -> NOT coplanar with the substituents.
+      - 1 neighbour (carbonyl O, nitrile N): two lone pairs at +/-120 deg from
+        the A=X bond, in the plane defined by X and its other substituents.
+    """
+    pa = xyz[a.GetIdx()]
+    us = [u for u in (_unit(xyz[nb.GetIdx()] - pa) for nb in a.GetNeighbors())
+          if u is not None]
+
+    if len(us) >= 2:
+        u1, u2 = us[0], us[1]
+        bis = _unit(-(u1 + u2))          # in-plane, opposite the bonds
+        perp = _unit(np.cross(u1, u2))   # normal to the X-A-Y plane
+        if bis is None or perp is None:
+            return []
+        return [_unit(bis * np.cos(_TET_HALF) + s * perp * np.sin(_TET_HALF))
+                for s in (+1.0, -1.0)]
+
+    if len(us) == 1:
+        u1 = us[0]
+        nb0 = a.GetNeighbors()[0]
+        refs = [xyz[x.GetIdx()] for x in nb0.GetNeighbors() if x.GetIdx() != a.GetIdx()]
+        if not refs:
+            return [(-u1)]              # nothing to define a plane -> straight out
+        w = _unit(np.mean(refs, axis=0) - xyz[nb0.GetIdx()])
+        axis = _unit(np.cross(u1, w if w is not None else u1 + np.array([1e-3, 0, 0])))
+        if axis is None:
+            return [(-u1)]
+        return [_rotate(-u1, axis, ang) for ang in (np.deg2rad(120), np.deg2rad(-120))]
+
+    return []
 
 
 class ProjectedPointPharmacophoreGenerator(RDKitPharmacophoreGenerator):
@@ -89,14 +144,10 @@ class ProjectedPointPharmacophoreGenerator(RDKitPharmacophoreGenerator):
             elif family == "Acceptor":
                 for ai in atom_ids:
                     a = mol.GetAtomWithIdx(int(ai))
-                    heavy = [xyz[nb.GetIdx()] for nb in a.GetNeighbors()
-                             if nb.GetAtomicNum() != 1]
-                    if not heavy:
-                        continue
-                    v = xyz[ai] - np.mean(heavy, axis=0)
-                    n = np.linalg.norm(v)
-                    if n > 1e-3:
-                        add(xyz[ai] + v / n * self.acceptor_dist, "AcceptorProj")
+                    for lp in _acceptor_lone_pairs(a, xyz):
+                        lp = _unit(lp)
+                        if lp is not None:
+                            add(xyz[ai] + lp * self.acceptor_dist, "AcceptorProj")
 
             elif family == "Aromatic":
                 ring = np.array([xyz[int(ai)] for ai in atom_ids])
