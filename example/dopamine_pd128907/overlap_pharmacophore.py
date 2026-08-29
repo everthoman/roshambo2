@@ -138,18 +138,28 @@ with open("overlap_pharmacophore.pml", "w") as fh:
         "show sticks, dopamine or PD128907\n"
         "util.cbac dopamine\n"
         "util.cbag PD128907\n\n"
+        "set stick_radius, 0.1, dopamine or PD128907\n\n"
         "load pharmacophore_overlap_model.sdf, pharm\n"
+        "unbond pharm, pharm\n"
         "show spheres, pharm\n"
-        "set sphere_scale, 0.5, pharm\n"
-        "set sphere_transparency, 0.3, pharm\n"
+        "set sphere_scale, 0.4, pharm\n"
+        "set sphere_transparency, 0.2, pharm\n"
         "color slate,     pharm and elem N\n"     # Donor
         "color firebrick, pharm and elem O\n"     # Acceptor
         "color orange,    pharm and elem Fe\n"    # PosIonizable
         "color green,     pharm and elem Cl\n"    # NegIonizable
         "color yellow,    pharm and elem S\n"     # Aromatic
         "color grey60,    pharm and elem Br\n"    # Hydrophobe
-        "label pharm, {'N':'Donor','O':'Acceptor','FE':'Pos','CL':'Neg',"
-        "'S':'Aromatic','BR':'Hydrophobe'}.get(elem.upper(), elem)\n"
-        "set label_size, 18\nbg_color white\nset orthoscopic, 1\nzoom all, 3\n"
+        # one label per family (avoids overlapping text where features cluster)
+        "python\n"
+        "seen=set()\n"
+        "fams={'N':'Donor','O':'Acceptor','S':'Aromatic','BR':'Hydrophobe'}\n"  # skip Pos/Neg (obvious by colour, avoids label pile-up)
+        "for at in cmd.get_model('pharm').atom:\n"
+        "    fam=fams.get(at.symbol.upper())\n"
+        "    if fam and fam not in seen:\n"
+        "        seen.add(fam); cmd.label(f'pharm and index {at.index}', repr(fam))\n"
+        "python end\n"
+        "set label_size, 16\nset label_color, black\nset label_position, (0,0,3)\n"
+        "bg_color white\nset orthoscopic, 1\nset ray_shadows, 0\norient\nzoom all, 2.5\n"
     )
 print("wrote overlap_pharmacophore.pml")
