@@ -9,6 +9,7 @@ backend, `optim_mode="combination"`.
 | `overlap_pharmacophore.py` | keeps only the query/hit feature pairs roshambo2's colour term actually overlaps (Gaussian overlap-fraction cutoff, arg = min fraction, default 0.10) and writes a standalone model | `pharmacophore_overlap_model.sdf` |
 | `projected_pharmacophore.py` | reusable `ProjectedPointPharmacophoreGenerator` — adds ROCS-style projected donor / acceptor / ring-normal points so colour scoring rewards H-bond / stacking **direction** | (importable module) |
 | `overlay_projected.py` | runs the overlay with stock vs base+projected vs projected-only colour models and writes the projected feature cloud | `projected_hits_dopamine_*.sdf`, `ligand_*_proj.sdf` |
+| `conf_scan.py` | scans (dopamine query confs) x (PD128907 dataset confs) for the projected model | prints a table |
 
 ## PyMOL
 
@@ -32,6 +33,19 @@ Hydrophobe `Br` grey · DonorProj `F` · AcceptorProj `I` · AromaticProj `B`.
 
 Projected points lower the colour Tanimoto because the two molecules only
 partly agree on feature *direction*, not just position.
+
+### Conformer count (`conf_scan.py`, base+projected model)
+
+| dopamine confs | PD128907 confs | shape | colour | combo |
+|---|---|---|---|---|
+| 1  | 20  | 0.634 | 0.355 | 0.494 |
+| 1  | 100 | 0.620 | 0.397 | 0.508 |
+| 25 | 100 | 0.639 | 0.411 | 0.525 |
+| 25 | 400 | 0.639 | 0.419 | 0.529 |
+
+PD128907 is rigid, so its dataset confs saturate by ~100. Dopamine is the
+flexible partner — sampling its query conformers (→25) is what actually moves
+the score. Plateau ~(25, 100); combo 0.49 → 0.53.
 
 ## Note
 
