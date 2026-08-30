@@ -16,13 +16,13 @@ unbond pharm, pharm
 show spheres, pharm
 set sphere_scale, 0.40, pharm
 set sphere_transparency, 0.15, pharm
-color grey60, pharm and elem Br
-color yellow, pharm and elem S
 color wheat, pharm and elem B
-color orange, pharm and elem Fe
+color firebrick, pharm and elem O
 color slate, pharm and elem N
 color hotpink, pharm and elem I
-color firebrick, pharm and elem O
+color yellow, pharm and elem S
+color grey60, pharm and elem Br
+color deepblue, pharm and elem F
 python
 lab = {'N': 'Donor', 'O': 'Acceptor', 'FE': 'Pos', 'CL': 'Neg', 'S': 'Aromatic', 'BR': 'Hydrophobe', 'F': 'D-proj', 'I': 'A-proj', 'B': 'ring-proj', 'P': 'Pos-proj'}
 off = {'Donor': (0, 1.8, 3), 'Acceptor': (0, -2.4, 3), 'Aromatic': (0, 0, 3), 'Hydrophobe': (0, 2.4, 3), 'Pos': (2.6, -1.6, 3), 'Neg': (-2.6, -1.6, 3), 'D-proj': (-2.6, 0.4, 3), 'A-proj': (0, -2.0, 3), 'ring-proj': (2.4, 1.4, 3), 'Pos-proj': (2.8, -0.2, 3)}

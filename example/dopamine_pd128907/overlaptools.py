@@ -14,8 +14,48 @@ and written at the pair midpoint.
 """
 import numpy as np
 from rdkit import Chem
+from rdkit.Chem import (rdDistGeom, rdForceFieldHelpers, rdMolAlign,
+                        rdMolDescriptors)
 
 V0 = (np.pi / 2) ** 1.5
+
+
+def conformer_ensemble(smiles, name, e_window=5.0, n_confs=None, rms_prune=0.4,
+                       seed=0xF00D):
+    """ETKDGv3 + MMFF conformers within `e_window` kcal/mol of the global
+    minimum, RMS-pruned (heavy atoms). Returns (mol, dE) where mol's conformers
+    are renumbered 0..M-1 in ascending-energy order and dE[i] is conformer i's
+    energy above the minimum (kcal/mol)."""
+    m = Chem.AddHs(Chem.MolFromSmiles(smiles))
+    if n_confs is None:
+        n_confs = min(600, 120 + 80 * rdMolDescriptors.CalcNumRotatableBonds(m))
+    p = rdDistGeom.ETKDGv3()
+    p.randomSeed = seed
+    rdDistGeom.EmbedMultipleConfs(m, numConfs=n_confs, params=p)
+    res = rdForceFieldHelpers.MMFFOptimizeMoleculeConfs(m)          # [(flag, E), ...]
+    energy = {c.GetId(): e for c, (_, e) in zip(m.GetConformers(), res)}
+    emin = min(energy.values())
+    order = sorted((cid for cid, e in energy.items() if e - emin <= e_window),
+                   key=lambda cid: energy[cid])
+
+    # prune on heavy atoms + polar (N/O) H so O-H / N-H rotamers survive as
+    # distinct conformers (their direction drives the donor / cation projected
+    # points, and the rotation barrier is small enough to be worth sampling)
+    from ligtools import polar_only
+    pmol = polar_only(m)
+    kept = []
+    for cid in order:
+        if all(rdMolAlign.GetBestRMS(pmol, pmol, cid, kj) > rms_prune for kj in kept):
+            kept.append(cid)
+
+    out = Chem.Mol(m)
+    out.RemoveAllConformers()
+    dE = []
+    for cid in kept:
+        out.AddConformer(Chem.Conformer(m.GetConformer(cid)), assignId=True)
+        dE.append(energy[cid] - emin)
+    out.SetProp("_Name", name)
+    return out, dE
 
 
 def add_tversky(df, alpha=0.95, mixing=0.5):

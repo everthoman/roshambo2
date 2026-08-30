@@ -1,31 +1,41 @@
 # PD128907 vs dopamine — overlap-only pharmacophore models
 
-The **rigid** D3 agonist PD128907 is the query/template (its lowest-energy
-conformer); **flexible** dopamine is the hit — roshambo2 samples dopamine
-conformers and finds the best-fitting pose. CUDA backend, `optim_mode="combination"`.
-Only the roshambo2 "color" feature points that **actually overlap** between the
-two molecules are output/rendered.
+Both molecules contribute **every MMFF conformer within 5 kcal/mol** of their own
+global minimum (`overlaptools.conformer_ensemble`, RMS-pruned including the polar
+N/O hydrogens so O–H / N–H rotamers survive). roshambo2 aligns every dopamine
+conformer to every PD128907 conformer, and each alignment is ranked by
+
+    adjusted = score − ENERGY_LAMBDA · (dE_PD128907 + dE_dopamine)
+
+— the raw shape/colour score minus a linear penalty on the conformational strain
+both partners pay. The best-adjusted alignment builds the model. CUDA backend,
+`optim_mode="combination"`. Only the "color" feature points that **actually
+overlap** are output/rendered.
 
 | file | what it does |
 |---|---|
 | `roshambo_dopamine.py` | minimal overlay — prints the score, no files |
 | `projected_pharmacophore.py` | `ProjectedPointPharmacophoreGenerator`: adds ROCS-style projected donor / acceptor lone-pair / ring-normal / cation points so colour scoring rewards H-bond & stacking **direction** (importable) |
-| `overlaptools.py` | feature-point extraction, overlap matching (`exp(-d²/2) ≥ min_overlap`), model SDF + PyMOL loader, and `add_tversky` for partial / "fit" scoring (importable) |
+| `overlaptools.py` | `conformer_ensemble` (≤ E-window MMFF confs, polar-H RMS prune), feature-point extraction, overlap matching, model SDF + PyMOL loader, `add_tversky` (importable) |
 | `ligtools.py` | `pose_with_H` (put the *scored* hydrogens on the aligned pose) + `polar_only` (importable) |
-| `overlap_pharmacophore.py` | **the script** — PD128907 template (rigid) vs 200 dopamine hit confs; builds the overlap-only model for the **stock** and the **projected** colour model, renders both |
+| `overlap_pharmacophore.py` | **the script** — every ≤ 5 kcal/mol conformer of both molecules, all pairwise alignments, ranked by score − strain penalty; builds the overlap-only model for the **stock** and the **projected** colour model, renders both |
 | `consensus_pharmacophore.py` | multi-ligand: aligns 6 dopaminergic agonists to the most rigid one (apomorphine), clusters feature points, keeps those seen in ≥ N ligands |
 | `conf_scan.py` | conformer-count sweep for the projected model |
 
 ## Run
 
 ```
-python overlap_pharmacophore.py            # min_overlap 0.15 (d ≤ ~1.95 Å)
-python overlap_pharmacophore.py 0.30       # stricter
-python overlap_pharmacophore.py 0.15 0.05  # rank/select by Tversky (dopamine fits inside PD128907)
+python overlap_pharmacophore.py                 # min_overlap 0.15, strain penalty 0.05/kcal
+python overlap_pharmacophore.py 0.30            # stricter feature cutoff
+python overlap_pharmacophore.py 0.15 0.05 0.10  # Tversky alpha 0.05, strain penalty 0.10/kcal
 
-pymol overlap_stock.pml                    # 8 shared features, stock model
-pymol overlap_projected.pml                # 12 shared features, directional model
+pymol overlap_stock.pml                         # 7 shared features, stock model
+pymol overlap_projected.pml                     # 11 shared features, directional model
 ```
+
+Args: `[min_overlap] [tversky_alpha] [energy_lambda]`. `energy_lambda` is score
+units per kcal/mol of total strain (default 0.05, so a 2 kcal/mol strained
+conformer must score 0.1 higher to be chosen).
 
 **Partial matching (Tversky / "fit")** — `overlaptools.add_tversky(df, alpha)`
 computes `O_AB / (alpha·O_query + (1-alpha)·O_hit)` from the overlap + self-overlap
@@ -51,18 +61,23 @@ PosIonizable `Fe` orange · NegIonizable `Cl` green · Aromatic `S` yellow ·
 Hydrophobe `Br` grey · DonorProj `F` deepblue · AcceptorProj `I` hotpink ·
 AromaticProj `B` wheat · PosIonizableProj `P` purple.
 
-## Scores (this machine, ETKDGv3 + MMFF, seed 0xF00D; PD128907 template + 200 dopamine confs)
+## Scores (this machine, ETKDGv3 + MMFF, seed 0xF00D)
 
-| colour model | shape | colour | combo | shared features (f ≥ 0.15) | % of colour overlap |
-|---|---|---|---|---|---|
-| stock (1 pt/feature) | 0.633 | 0.483 | 0.558 | 8  | 75 % |
-| projected            | 0.637 | 0.293 | 0.465 | 12 | 77 % |
+≤ 5 kcal/mol ensembles: PD128907 10 conformers (dE 0.0–3.9), dopamine 10
+(dE 0.0–4.7). Best-adjusted alignment for both colour models uses each
+molecule's **global minimum** (0.0 + 0.0 kcal/mol strain).
 
-Projected points lower the *combined* colour Tanimoto — dopamine and PD128907
-only partly agree on feature *direction*, not just position. With PD128907 fixed
-as the template, dopamine's best-fitting conformer aligns the ring, hydrophobes
-and the amine well but not the donor/acceptor lone-pair directions, so
-`DonorProj` / `PosIonizableProj` drop out.
+| colour model | shape | colour | combo | shared features (f ≥ 0.15) |
+|---|---|---|---|---|
+| stock (1 pt/feature) | 0.629 | 0.293 | 0.461 | 7  |
+| projected            | 0.527 | 0.279 | 0.403 | 11 |
+
+Lower than an unconstrained-conformer search would give: restricted to
+physically reasonable geometries, low-energy dopamine cannot span PD128907's
+ring **and** its amine at once — the winning pose stacks the aromatic rings and
+matches the ring hydroxyl, and the amine (`PosIonizable`) drops out of the
+overlap. The strain penalty never bites here because no strained conformer
+scores enough better to pay for itself.
 
 ### Consensus of 6 agonists (`consensus_pharmacophore.py`)
 
