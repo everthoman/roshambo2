@@ -47,17 +47,22 @@ salt-bridge vector and one `DonorProj` are the weak links (d ≈ 1.6 Å).
 
 ### Consensus of 6 agonists (`consensus_pharmacophore.py`)
 
-roshambo2 aligns only pairwise, so: pick the most rigid ligand (apomorphine),
-roshambo2-align the other five to it, then cluster same-family feature points
-and keep clusters present in ≥ 4/6 ligands.
+Ligands (neutral SMILES) come from `dopamine_ligands.txt`; the basic amine of
+each is protonated. roshambo2 aligns only pairwise, so: pick the most rigid
+ligand (apomorphine), roshambo2-align the other five to it, then cluster
+same-family feature points and keep clusters present in ≥ 4/6 ligands.
 
-- **Consensus** (all/most ligands): the aromatic ring (Aromatic + ring-normal
-  projected + hydrophobe, 6/6) and one ring-hydroxyl acceptor/donor (4–5/6).
-- **No consensus**: `PosIonizable` / `PosIonizableProj`. Shape+colour overlay
-  lines up the large shared ring systems but does not pin the protonated amine,
-  so the basic nitrogens scatter across these diverse scaffolds. This is why
-  aminergic pharmacophores are usually built by anchoring on the charged centre
-  (pharmacophore- or field-based alignment) rather than pure shape.
+13 consensus points — the classic aminergic layout:
+
+- **protonated amine** (`PosIonizable`, 4/6)
+- **aromatic ring** — `Aromatic` + ring-normal projected + `Hydrophobe`, 6/6
+- **ring hydroxyl** — `Acceptor` / `Donor` and their projected points, 4–5/6
+
+Only `PosIonizableProj` stays below threshold: the amine *position* is shared
+but its N–H points different ways across the scaffolds, so the salt-bridge
+*vector* does not cluster. (With less accurate input structures even
+`PosIonizable` misses — shape+colour overlay pins the large ring systems more
+tightly than the amine.)
 
 ### Conformer count (`conf_scan.py`, projected model)
 

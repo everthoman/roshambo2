@@ -9,11 +9,15 @@ roshambo2 only aligns pairwise, so a multi-ligand model is built on top:
   4. cluster same-family feature points across all ligands; a cluster seen in
      >= MIN_LIGANDS of them becomes a consensus point at its centroid
 
+Ligands are read from dopamine_ligands.txt (one "name SMILES" per line, neutral);
+the basic amine of each is protonated before use.
+
 Outputs (cwd):
   consensus_model.sdf              the consensus points
   aligned_<ligand>.sdf             each ligand in the reference frame (polar H)
   consensus_pharmacophore.pml/.png PyMOL loader + render
 """
+import os
 import sys
 from collections import defaultdict
 
@@ -25,17 +29,36 @@ from projected_pharmacophore import ProjectedPointPharmacophoreGenerator
 from ligtools import pose_with_H, polar_only
 import overlaptools as ot
 
-# D2/D3 agonists - protonated amine + aromatic (most with a ring hydroxyl)
-LIGANDS = {
-    "dopamine":    "[NH3+]CCc1ccc(O)c(O)c1",
-    "apomorphine": "C[NH+]1CCc2cccc3c2[C@@H]1Cc1ccc(O)c(O)c1-3",
-    "7-OH-DPAT":   "CCC[NH+](CCC)[C@H]1CCc2cccc(O)c2C1",
-    "PD128907":    "CCC[NH+]1CCO[C@@H]2[C@@H]1COC3=C2C=C(C=C3)O",
-    "quinpirole":  "CCC[NH+]1CC[C@H]2Cc3[nH]ncc3C[C@H]2C1",
-    "rotigotine":  "CCC[NH+](CCc1cccs1)[C@H]1CCc2cccc(O)c2C1",
-}
+LIGAND_FILE = os.path.join(os.path.dirname(__file__), "dopamine_ligands.txt")
 N_CONFS = 50
 CLUSTER_RADIUS = 1.6                                   # Angstrom
+
+# trivalent neutral N, not amide / amidine / N-oxide / N-N / aniline
+_BASIC_N = Chem.MolFromSmarts(
+    "[#7;X3;+0;!$([#7][#6]=[O,N,S]);!$([#7]=*);!$([#7]~[O,N,P,S]);!$([#7]a)]")
+
+
+def protonate(smiles):
+    m = Chem.MolFromSmiles(smiles)
+    rw = Chem.RWMol(m)
+    for (i,) in m.GetSubstructMatches(_BASIC_N):
+        a = rw.GetAtomWithIdx(i)
+        a.SetFormalCharge(1)
+        a.SetNumExplicitHs(a.GetTotalNumHs() + 1)
+        a.SetNoImplicit(True)
+    m = rw.GetMol()
+    Chem.SanitizeMol(m)
+    return m
+
+
+LIGANDS = {}
+for line in open(LIGAND_FILE):
+    line = line.strip()
+    if not line or line.startswith("#"):
+        continue
+    name, smi = line.split(None, 1)
+    LIGANDS[name] = Chem.MolToSmiles(protonate(smi))
+
 N = len(LIGANDS)
 MIN_LIGANDS = int(sys.argv[1]) if len(sys.argv) > 1 else max(2, round(0.6 * N))
 
