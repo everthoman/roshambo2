@@ -28,6 +28,7 @@ from rdkit import Chem
 from rdkit.Chem import rdDistGeom, rdForceFieldHelpers
 from roshambo2 import Roshambo2
 from projected_pharmacophore import ProjectedPointPharmacophoreGenerator
+from ligtools import pose_with_H, polar_only
 
 MIN_OVERLAP = float(sys.argv[1]) if len(sys.argv) > 1 else 0.15   # d <= ~1.95 A
 V0 = (np.pi / 2) ** 1.5
@@ -84,21 +85,24 @@ best_mol = dopamine_confs[best_q]
 best_mol.SetProp("_Name", "dopamine_H+")
 calc = Roshambo2(best_mol, dataset, color=True, remove_Hs_before_color_assignment=False,
                  color_generator=ProjectedPointPharmacophoreGenerator())
-df = next(iter(calc.compute(backend="cuda", reduce_over_conformers=True,
+df = next(iter(calc.compute(backend="cuda", reduce_over_conformers=False,
                             optim_mode="combination", combination_param=0.5,
                             write_scores=False).values()))
-overlap_color = float(df["overlap_color"].iloc[0])
+overlap_color = float(df["overlap_color"].iloc[0])          # top row = best conformer
 
-calc.write_best_fit_structures(hits_sdf_prefix="overlap_hits",
+calc.write_best_fit_structures(hits_sdf_prefix="overlap_hits", top_n=1,
                                write_color_pseudomols=True, append_query=True,
                                feature_to_symbol_map=FEATURE_TO_SYMBOL)
 
-_hits = list(Chem.SDMolSupplier("overlap_hits_dopamine_H+_0.sdf",
-                                removeHs=False, sanitize=True))
-for _m, _fn in zip(_hits, ("ligand_dopamine_ovl.sdf", "ligand_PD128907_ovl.sdf")):
-    polar = [a.GetIdx() for a in _m.GetAtoms() if a.GetAtomicNum() in (7, 8)]
-    with Chem.SDWriter(_fn) as _w:
-        _w.write(Chem.AddHs(_m, addCoords=True, onlyOnAtoms=polar))   # polar H only
+# ligand files: keep the exact hydrogens roshambo2 scored (see ligtools) - a
+# fresh AddHs would guess a different phenol O-H rotamer than the one used to
+# place the donor feature, so the drawn O-H would disagree with DonorProj.
+hit_noH = calc.get_best_fit_structures(top_n=1)["dopamine_H+_0"][0]
+k = int(hit_noH.GetProp("name").rsplit("_", 1)[-1])
+with Chem.SDWriter("ligand_dopamine_ovl.sdf") as _w:
+    _w.write(polar_only(best_mol))
+with Chem.SDWriter("ligand_PD128907_ovl.sdf") as _w:
+    _w.write(polar_only(pose_with_H(hit_noH, Chem.Mol(dataset[0], confId=k))))
 
 # ---- 2. read the two feature clouds (same coordinate frame) --------------
 mols = list(Chem.SDMolSupplier("overlap_hits_dopamine_H+_0_color_features.sdf",
@@ -144,7 +148,7 @@ print(f"\nmatched pairs: {len(pairs)}   sum v_color = {explained:.2f} / "
 # ---- 4. write the overlap-only pharmacophore model ---------------------
 rw = Chem.RWMol()
 conf = Chem.Conformer(len(pairs))
-for k, p in enumerate(pairs):
+for p in pairs:
     conf.SetAtomPosition(rw.AddAtom(Chem.Atom(SYMBOL_TO_Z[p["symbol"]])), p["xyz"].tolist())
 out = rw.GetMol()
 out.AddConformer(conf)

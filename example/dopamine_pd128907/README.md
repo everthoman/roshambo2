@@ -10,6 +10,7 @@ backend, `optim_mode="combination"`.
 | `overlay_projected.py` | runs the overlay with stock vs base+projected vs projected-only colour models and writes the projected feature cloud | `projected_hits_dopamine_*.sdf`, `ligand_*_proj.sdf` |
 | `overlap_pharmacophore.py` | using the projected model, keeps only the query/hit feature pairs roshambo2's colour term actually overlaps (Gaussian overlap-fraction cutoff, arg = min fraction, default 0.15) and writes a standalone model | `pharmacophore_overlap_model.sdf`, `ligand_*_ovl.sdf` |
 | `conf_scan.py` | scans (dopamine query confs) x (PD128907 dataset confs) for the projected model | prints a table |
+| `ligtools.py` | `pose_with_H` (carry the scored hydrogens onto the aligned pose) + `polar_only` | (importable module) |
 
 ## PyMOL
 
@@ -26,7 +27,15 @@ AromaticProj `B` wheat · PosIonizableProj `P` purple.
 
 The ligand SDFs carry their polar (N/O) hydrogens for visualisation (small grey
 spheres); the projected donor / PosIonizable points run along those N–H / O–H
-bonds.
+bonds. `ligtools.pose_with_H` rigid-body-fits the *original* H-bearing conformer
+onto roshambo2's aligned heavy-atom skeleton, so the drawn hydrogens are exactly
+the ones that were scored — a plain `Chem.AddHs` guesses its own phenol O–H
+rotamer and the drawn O–H then disagrees with `DonorProj`.
+
+Caveat: a phenol / hydroxyl O–H is a low-barrier rotor, so its `DonorProj`
+direction is only as good as the conformer the generator happened to pick.
+N–H donors (amines, `PosIonizableProj`) are fixed by the heavy-atom framework
+and are reliable.
 
 ## Scores (this machine, ETKDGv3 + MMFF, seed 0xF00D)
 

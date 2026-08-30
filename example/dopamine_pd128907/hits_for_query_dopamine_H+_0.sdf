@@ -30,7 +30,7 @@ M  END
 True
 
 $$$$
-PD128907_H+
+PD128907_H+_7
      RDKit          3D
 
  18 20  0  0  0  0  0  0  0  0999 V2000
@@ -81,7 +81,7 @@ M  END
 CCC[NH+]1CCO[C@H]2c3cc(O)ccc3OC[C@@H]21
 
 >  <name>  (2) 
-PD128907_H+
+PD128907_H+_7
 
 >  <tanimoto_combination>  (2) 
 0.5522022
