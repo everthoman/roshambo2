@@ -11,7 +11,7 @@ query/hit feature pair separated by d (Angstrom) contributes
     v(d) = (pi/2)**1.5 * exp(-d**2 / 2)          # (pi/2)**1.5 = 1.9687 = v(0)
 
 A pair is "overlapping" when its overlap fraction f = exp(-d**2/2) exceeds
---min-overlap (argv[1], default 0.10, i.e. d <= 2.15 A). Features are matched
+--min-overlap (argv[1], default 0.15, i.e. d <= ~1.95 A). Features are matched
 query<->hit greedily by nearest distance within each family and written at the
 pair midpoint as a standalone model.
 
@@ -38,10 +38,11 @@ FEATURE_TO_SYMBOL = {
     "Donor": "N", "Acceptor": "O", "PosIonizable": "Fe", "NegIonizable": "Cl",
     "Aromatic": "S", "Hydrophobe": "Br",
     "DonorProj": "F", "AcceptorProj": "I", "AromaticProj": "B",
+    "PosIonizableProj": "P",
 }
 SYMBOL_TO_FEATURE = {v: k for k, v in FEATURE_TO_SYMBOL.items()}
 SYMBOL_TO_Z = {"N": 7, "O": 8, "Fe": 26, "Cl": 17, "S": 16, "Br": 35,
-               "F": 9, "I": 53, "B": 5}
+               "F": 9, "I": 53, "B": 5, "P": 15}
 
 
 def gen(smiles, name, n):
@@ -93,10 +94,11 @@ calc.write_best_fit_structures(hits_sdf_prefix="overlap_hits",
                                feature_to_symbol_map=FEATURE_TO_SYMBOL)
 
 _hits = list(Chem.SDMolSupplier("overlap_hits_dopamine_H+_0.sdf",
-                                removeHs=False, sanitize=False))
+                                removeHs=False, sanitize=True))
 for _m, _fn in zip(_hits, ("ligand_dopamine_ovl.sdf", "ligand_PD128907_ovl.sdf")):
+    polar = [a.GetIdx() for a in _m.GetAtoms() if a.GetAtomicNum() in (7, 8)]
     with Chem.SDWriter(_fn) as _w:
-        _w.write(_m)
+        _w.write(Chem.AddHs(_m, addCoords=True, onlyOnAtoms=polar))   # polar H only
 
 # ---- 2. read the two feature clouds (same coordinate frame) --------------
 mols = list(Chem.SDMolSupplier("overlap_hits_dopamine_H+_0_color_features.sdf",
@@ -163,7 +165,11 @@ with open("overlap_pharmacophore.pml", "w") as fh:
         "hide everything, dopamine or PD128907\n"
         "show sticks, dopamine or PD128907\n"
         "set stick_radius, 0.1, dopamine or PD128907\n"
-        "util.cbac dopamine\nutil.cbag PD128907\n\n"
+        "set valence, 0\n"
+        "util.cbac dopamine\nutil.cbag PD128907\n"
+        "color grey30, (dopamine or PD128907) and elem H\n"
+        "show spheres, (dopamine or PD128907) and elem H\n"
+        "set sphere_scale, 0.11, (dopamine or PD128907) and elem H\n\n"
         "load pharmacophore_overlap_model.sdf, pharm\n"
         "unbond pharm, pharm\n"
         "show spheres, pharm\n"
@@ -178,12 +184,14 @@ with open("overlap_pharmacophore.pml", "w") as fh:
         "color deepblue,  pharm and elem F\n"       # DonorProj
         "color hotpink,   pharm and elem I\n"       # AcceptorProj
         "color wheat,     pharm and elem B\n"       # AromaticProj
+        "color purple,    pharm and elem P\n"       # PosIonizableProj
         "python\n"
         "seen=set()\n"
         "fams={'N':'Donor','O':'Acceptor','S':'Aromatic','BR':'Hydrophobe',"
-        "'F':'D-proj','I':'A-proj','B':'ring-proj'}\n"
+        "'F':'D-proj','I':'A-proj','B':'ring-proj','P':'Pos-proj'}\n"
         "off={'Donor':(0,1.6,3),'Acceptor':(0,-2.4,3),'Aromatic':(0,0,3),"
-        "'Hydrophobe':(0,2.2,3),'D-proj':(-2.4,0,3),'A-proj':(0,-2.0,3),'ring-proj':(2.2,1.2,3)}\n"
+        "'Hydrophobe':(0,2.2,3),'D-proj':(-2.4,0,3),'A-proj':(0,-2.0,3),"
+        "'ring-proj':(2.2,1.2,3),'Pos-proj':(2.4,-1.4,3)}\n"
         "for at in cmd.get_model('pharm').atom:\n"
         "    fam=fams.get(at.symbol.upper())\n"
         "    if fam and fam not in seen:\n"

@@ -21,7 +21,12 @@ pymol overlap_pharmacophore.pml # overlay + directional overlapping-only model (
 
 Feature → element → colour: Donor `N` slate · Acceptor `O` firebrick ·
 PosIonizable `Fe` orange · NegIonizable `Cl` green · Aromatic `S` yellow ·
-Hydrophobe `Br` grey · DonorProj `F` · AcceptorProj `I` · AromaticProj `B`.
+Hydrophobe `Br` grey · DonorProj `F` deepblue · AcceptorProj `I` hotpink ·
+AromaticProj `B` wheat · PosIonizableProj `P` purple.
+
+The ligand SDFs carry their polar (N/O) hydrogens for visualisation (small grey
+spheres); the projected donor / PosIonizable points run along those N–H / O–H
+bonds.
 
 ## Scores (this machine, ETKDGv3 + MMFF, seed 0xF00D)
 
@@ -30,21 +35,22 @@ Hydrophobe `Br` grey · DonorProj `F` · AcceptorProj `I` · AromaticProj `B`.
 | colour model | shape | colour | combo |
 |---|---|---|---|
 | stock (1 pt/feature) | 0.633 | 0.500 | 0.566 |
-| base + projected pts | 0.656 | 0.360 | 0.508 |
-| projected pts only   | 0.503 | 0.512 | 0.507 |
+| base + projected pts | 0.629 | 0.362 | 0.496 |
+| projected pts only   | 0.494 | 0.463 | 0.479 |
 
-Projected points lower the *combined* colour Tanimoto because the two molecules
-only partly agree on feature *direction*, not just position — and "projected
-only" will trade shape for a much better directional colour match.
+Projected points (incl. the PosIonizable salt-bridge vector) lower the *combined*
+colour Tanimoto because the two molecules only partly agree on feature
+*direction*, not just position — and "projected only" trades shape for a better
+directional colour match.
 
 ### Conformer count (`conf_scan.py`, base+projected model)
 
 | dopamine confs | PD128907 confs | shape | colour | combo |
 |---|---|---|---|---|
-| 1  | 20  | 0.625 | 0.337 | 0.481 |
-| 1  | 100 | 0.644 | 0.346 | 0.495 |
-| 25 | 100 | 0.656 | 0.360 | 0.508 |
-| 25 | 400 | 0.642 | 0.391 | 0.516 |
+| 1  | 20  | 0.623 | 0.318 | 0.471 |
+| 1  | 100 | 0.629 | 0.333 | 0.481 |
+| 25 | 100 | 0.629 | 0.362 | 0.496 |
+| 25 | 400 | 0.637 | 0.378 | 0.507 |
 
 PD128907 is rigid, so its dataset confs saturate by ~100. Dopamine is the
 flexible partner — sampling its query conformers (→25) is what actually moves

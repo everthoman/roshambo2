@@ -13,6 +13,9 @@ This generator adds ROCS-style **projected points**:
                carbonyl O / nitrile N
   * Aromatic -> two points `ring_dist` A above / below the ring plane
                along the ring normal
+  * PosIonizable -> one point `pos_dist` A out along each N-H of a protonated
+               amine (the salt-bridge vector), like a donor; straight out from
+               the mean bond direction if the cation carries no H
 
 The projected points get their own feature families (`DonorProj`,
 `AcceptorProj`, `AromaticProj`) that only overlap their own kind, exactly like
@@ -29,17 +32,17 @@ Usage
     calc = Roshambo2(query, dataset, color=True, color_generator=cg)
     calc.compute(backend="cuda", optim_mode="combination")
 
-Knobs: donor_dist, acceptor_dist, ring_dist (Angstrom); proj_weight (Gaussian
-height for the projected families, <1 down-weights them); keep_base_points
-(set False for a projected-points-only model).  The molecule handed to the
-generator keeps its explicit H atoms as long as Roshambo2 is called with the
-default remove_Hs_before_color_assignment=False.
+Knobs: donor_dist, acceptor_dist, ring_dist, pos_dist (Angstrom); proj_weight
+(Gaussian height for the projected families, <1 down-weights them);
+keep_base_points (set False for a projected-points-only model).  The molecule
+handed to the generator keeps its explicit H atoms as long as Roshambo2 is
+called with the default remove_Hs_before_color_assignment=False.
 """
 import numpy as np
 from roshambo2.pharmacophore import RDKitPharmacophoreGenerator
 
 _BASE = ("Donor", "Acceptor", "PosIonizable", "NegIonizable", "Aromatic", "Hydrophobe")
-_PROJ = ("DonorProj", "AcceptorProj", "AromaticProj")
+_PROJ = ("DonorProj", "AcceptorProj", "AromaticProj", "PosIonizableProj")
 
 _TET_HALF = np.deg2rad(54.75)   # half the tetrahedral angle (109.47/2)
 
@@ -97,7 +100,7 @@ def _acceptor_lone_pairs(a, xyz):
 class ProjectedPointPharmacophoreGenerator(RDKitPharmacophoreGenerator):
 
     def __init__(self, donor_dist=3.0, acceptor_dist=3.0, ring_dist=3.5,
-                 proj_weight=1.0, keep_base_points=True,
+                 pos_dist=3.0, proj_weight=1.0, keep_base_points=True,
                  base_families=_BASE, fdefName=None):
 
         families = list(base_families) + list(_PROJ)
@@ -110,6 +113,7 @@ class ProjectedPointPharmacophoreGenerator(RDKitPharmacophoreGenerator):
         self.donor_dist = donor_dist
         self.acceptor_dist = acceptor_dist
         self.ring_dist = ring_dist
+        self.pos_dist = pos_dist
         self.keep_base_points = keep_base_points
 
     # roshambo2 calls this with an RDKit mol that has a single conformer
@@ -140,6 +144,23 @@ class ProjectedPointPharmacophoreGenerator(RDKitPharmacophoreGenerator):
                         n = np.linalg.norm(v)
                         if n > 1e-3:
                             add(xyz[ai] + v / n * self.donor_dist, "DonorProj")
+
+            elif family == "PosIonizable":
+                # cation directionality: along each N-H of a protonated amine
+                # (the salt-bridge vector), or straight out if there is no H
+                for ai in atom_ids:
+                    a = mol.GetAtomWithIdx(int(ai))
+                    hs = [nb for nb in a.GetNeighbors() if nb.GetAtomicNum() == 1]
+                    if hs:
+                        for nb in hs:
+                            u = _unit(xyz[nb.GetIdx()] - xyz[ai])
+                            if u is not None:
+                                add(xyz[ai] + u * self.pos_dist, "PosIonizableProj")
+                    else:
+                        heavy = [xyz[nb.GetIdx()] for nb in a.GetNeighbors()]
+                        u = _unit(xyz[ai] - np.mean(heavy, axis=0)) if heavy else None
+                        if u is not None:
+                            add(xyz[ai] + u * self.pos_dist, "PosIonizableProj")
 
             elif family == "Acceptor":
                 for ai in atom_ids:

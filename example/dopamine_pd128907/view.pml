@@ -6,8 +6,13 @@ load ligand_dopamine.sdf, dopamine
 load ligand_PD128907.sdf, PD128907
 hide everything, dopamine or PD128907
 show sticks, dopamine or PD128907
+set stick_radius, 0.12, dopamine or PD128907
+set valence, 0
 util.cbac dopamine
 util.cbag PD128907
+color grey30, (dopamine or PD128907) and elem H   # polar H (N/O only)
+show spheres, (dopamine or PD128907) and elem H
+set sphere_scale, 0.11, (dopamine or PD128907) and elem H
 
 # all per-molecule feature points (entry 1 = dopamine, entry 2 = PD128907)
 load hits_for_query_dopamine_H+_0_color_features.sdf, feats

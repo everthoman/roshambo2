@@ -48,9 +48,11 @@ calc.write_best_fit_structures(write_color_pseudomols=True, append_query=True,
                                feature_to_symbol_map=feature_to_symbol)
 print("\nfeature -> element:", feature_to_symbol)
 
-# split combined hits SDF -> one file per ligand (separate objects in PyMOL)
+# split combined hits SDF -> one file per ligand (separate objects in PyMOL),
+# with polar (N/O) hydrogens added back for visualisation
 _hits = list(Chem.SDMolSupplier("hits_for_query_dopamine_H+_0.sdf",
-                                removeHs=False, sanitize=False))
+                                removeHs=False, sanitize=True))
 for _m, _fn in zip(_hits, ("ligand_dopamine.sdf", "ligand_PD128907.sdf")):
+    polar = [a.GetIdx() for a in _m.GetAtoms() if a.GetAtomicNum() in (7, 8)]
     with Chem.SDWriter(_fn) as _w:
-        _w.write(_m)
+        _w.write(Chem.AddHs(_m, addCoords=True, onlyOnAtoms=polar))

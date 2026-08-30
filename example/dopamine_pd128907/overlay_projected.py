@@ -26,6 +26,7 @@ SYMBOL = {                       # feature family -> element (for PyMOL colourin
     "Donor": "N", "Acceptor": "O", "PosIonizable": "Fe",
     "NegIonizable": "Cl", "Aromatic": "S", "Hydrophobe": "Br",
     "DonorProj": "F", "AcceptorProj": "I", "AromaticProj": "B",
+    "PosIonizableProj": "P",
 }
 
 
@@ -94,10 +95,11 @@ calc.write_best_fit_structures(hits_sdf_prefix=PFX,
 hits_sdf = f"{PFX}_dopamine_H+_0.sdf"
 feats_sdf = f"{PFX}_dopamine_H+_0_color_features.sdf"
 
-_hits = list(Chem.SDMolSupplier(hits_sdf, removeHs=False, sanitize=False))
+_hits = list(Chem.SDMolSupplier(hits_sdf, removeHs=False, sanitize=True))
 for _m, _fn in zip(_hits, ("ligand_dopamine_proj.sdf", "ligand_PD128907_proj.sdf")):
+    polar = [a.GetIdx() for a in _m.GetAtoms() if a.GetAtomicNum() in (7, 8)]
     with Chem.SDWriter(_fn) as _w:
-        _w.write(_m)
+        _w.write(Chem.AddHs(_m, addCoords=True, onlyOnAtoms=polar))   # polar H only
 
 with open("overlay_projected.pml", "w") as fh:
     fh.write(
@@ -107,7 +109,11 @@ with open("overlay_projected.pml", "w") as fh:
         "hide everything, dopamine or PD128907\n"
         "show sticks, dopamine or PD128907\n"
         "set stick_radius, 0.12, dopamine or PD128907\n"
-        "util.cbac dopamine\nutil.cbag PD128907\n\n"
+        "set valence, 0\n"
+        "util.cbac dopamine\nutil.cbag PD128907\n"
+        "color grey30, (dopamine or PD128907) and elem H\n"
+        "show spheres, (dopamine or PD128907) and elem H\n"
+        "set sphere_scale, 0.11, (dopamine or PD128907) and elem H\n\n"
         f"load {feats_sdf}, feats\n"
         "set all_states, on\n"
         "unbond feats, feats\n"                     # kill spurious pseudo-atom bonds
@@ -122,8 +128,9 @@ with open("overlay_projected.pml", "w") as fh:
         "color deepblue,  feats and elem F\n"       # DonorProj
         "color hotpink,   feats and elem I\n"       # AcceptorProj
         "color wheat,     feats and elem B\n"       # AromaticProj
+        "color purple,    feats and elem P\n"       # PosIonizableProj
         "set sphere_scale, 0.45, feats and elem Fe\n"
-        "set sphere_transparency, 0.1, feats and (elem Fe or elem F or elem I or elem B)\n"
+        "set sphere_transparency, 0.1, feats and (elem Fe or elem F or elem I or elem B or elem P)\n"
         "bg_color white\nset orthoscopic, 1\nset ray_shadows, 0\norient\nzoom all, 2\n"
     )
 print(f"\nwrote {hits_sdf}, {feats_sdf} and overlay_projected.pml")

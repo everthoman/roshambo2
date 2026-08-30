@@ -5,8 +5,12 @@ load ligand_PD128907_ovl.sdf, PD128907
 hide everything, dopamine or PD128907
 show sticks, dopamine or PD128907
 set stick_radius, 0.1, dopamine or PD128907
+set valence, 0
 util.cbac dopamine
 util.cbag PD128907
+color grey30, (dopamine or PD128907) and elem H
+show spheres, (dopamine or PD128907) and elem H
+set sphere_scale, 0.11, (dopamine or PD128907) and elem H
 
 load pharmacophore_overlap_model.sdf, pharm
 unbond pharm, pharm
@@ -22,10 +26,11 @@ color grey60,    pharm and elem Br
 color deepblue,  pharm and elem F
 color hotpink,   pharm and elem I
 color wheat,     pharm and elem B
+color purple,    pharm and elem P
 python
 seen=set()
-fams={'N':'Donor','O':'Acceptor','S':'Aromatic','BR':'Hydrophobe','F':'D-proj','I':'A-proj','B':'ring-proj'}
-off={'Donor':(0,1.6,3),'Acceptor':(0,-2.4,3),'Aromatic':(0,0,3),'Hydrophobe':(0,2.2,3),'D-proj':(-2.4,0,3),'A-proj':(0,-2.0,3),'ring-proj':(2.2,1.2,3)}
+fams={'N':'Donor','O':'Acceptor','S':'Aromatic','BR':'Hydrophobe','F':'D-proj','I':'A-proj','B':'ring-proj','P':'Pos-proj'}
+off={'Donor':(0,1.6,3),'Acceptor':(0,-2.4,3),'Aromatic':(0,0,3),'Hydrophobe':(0,2.2,3),'D-proj':(-2.4,0,3),'A-proj':(0,-2.0,3),'ring-proj':(2.2,1.2,3),'Pos-proj':(2.4,-1.4,3)}
 for at in cmd.get_model('pharm').atom:
     fam=fams.get(at.symbol.upper())
     if fam and fam not in seen:
