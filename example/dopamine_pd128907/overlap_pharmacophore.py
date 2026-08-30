@@ -1,26 +1,19 @@
-"""Build a 3D pharmacophore model from ONLY the pharmacophore ("color") features
-that overlap between dopamine (query) and the roshambo2-aligned PD128907 (hit),
-using the directional model (ProjectedPointPharmacophoreGenerator: base points +
-projected donor / acceptor lone-pair / ring-normal points).
+"""dopamine vs PD128907: overlap-only pharmacophore models.
 
-roshambo2's colour term is a sum of Gaussian overlaps between same-family feature
-points (cpp_helper_functions.cpp::volume_color). For the default interaction map
-every same-family pair has width a=1, height p=1, point weights w=1, so a single
-query/hit feature pair separated by d (Angstrom) contributes
+Overlays protonated dopamine (query, N_QUERY_CONFS conformers, best kept) on the
+D3 agonist PD128907 (dataset, N_DATASET_CONFS conformers) with the CUDA backend,
+then keeps ONLY the "color" feature points that actually overlap between the two
+(overlaptools.match_overlap) and renders those.
 
-    v(d) = (pi/2)**1.5 * exp(-d**2 / 2)          # (pi/2)**1.5 = 1.9687 = v(0)
-
-A pair is "overlapping" when its overlap fraction f = exp(-d**2/2) exceeds
---min-overlap (argv[1], default 0.15, i.e. d <= ~1.95 A). Features are matched
-query<->hit greedily by nearest distance within each family and written at the
-pair midpoint as a standalone model.
+Two models are produced:
+  stock      - roshambo2's default 1-point-per-feature colour model
+  projected  - ProjectedPointPharmacophoreGenerator (adds directional donor /
+               acceptor lone-pair / ring-normal / cation projected points)
 
 Outputs (cwd):
-  overlap_hits_dopamine_H+_0.sdf                query + aligned PD128907
-  overlap_hits_dopamine_H+_0_color_features.sdf all feature points (per molecule)
-  ligand_dopamine_ovl.sdf / ligand_PD128907_ovl.sdf     the two ligands, separate
-  pharmacophore_overlap_model.sdf               ONLY the overlapping features
-  overlap_pharmacophore.pml                     PyMOL loader
+  overlap_model_stock.sdf      overlap_model_projected.sdf        the models
+  overlap_stock.pml  / .png    overlap_projected.pml  / .png      renders
+  ligand_{dopamine,PD128907}_{stock,proj}.sdf                     context ligands
 """
 import sys
 import numpy as np
@@ -29,21 +22,13 @@ from rdkit.Chem import rdDistGeom, rdForceFieldHelpers
 from roshambo2 import Roshambo2
 from projected_pharmacophore import ProjectedPointPharmacophoreGenerator
 from ligtools import pose_with_H, polar_only
+import overlaptools as ot
 
 MIN_OVERLAP = float(sys.argv[1]) if len(sys.argv) > 1 else 0.15   # d <= ~1.95 A
-V0 = (np.pi / 2) ** 1.5
 N_QUERY_CONFS = 25
 N_DATASET_CONFS = 100
-
-FEATURE_TO_SYMBOL = {
-    "Donor": "N", "Acceptor": "O", "PosIonizable": "Fe", "NegIonizable": "Cl",
-    "Aromatic": "S", "Hydrophobe": "Br",
-    "DonorProj": "F", "AcceptorProj": "I", "AromaticProj": "B",
-    "PosIonizableProj": "P",
-}
-SYMBOL_TO_FEATURE = {v: k for k, v in FEATURE_TO_SYMBOL.items()}
-SYMBOL_TO_Z = {"N": 7, "O": 8, "Fe": 26, "Cl": 17, "S": 16, "Br": 35,
-               "F": 9, "I": 53, "B": 5, "P": 15}
+DOPAMINE = "C1=CC(=C(C=C1CC[NH3+])O)O"
+PD128907 = "CCC[NH+]1CCO[C@@H]2[C@@H]1COC3=C2C=C(C=C3)O"
 
 
 def gen(smiles, name, n):
@@ -65,145 +50,60 @@ def split(mol):
     return out
 
 
-# ---- 1. overlay: sample dopamine, keep the best-combo conformer -----------
-dopamine_confs = split(gen("C1=CC(=C(C=C1CC[NH3+])O)O", "dopamine_H+", N_QUERY_CONFS))
-dataset = [gen("CCC[NH+]1CCO[C@@H]2[C@@H]1COC3=C2C=C(C=C3)O", "PD128907_H+", N_DATASET_CONFS)]
-
-scan = Roshambo2(list(dopamine_confs.values()), dataset, color=True,
-                 remove_Hs_before_color_assignment=False,
-                 conformers_have_unique_names=True,
-                 color_generator=ProjectedPointPharmacophoreGenerator())
-scores = scan.compute(backend="cuda", reduce_over_conformers=True,
-                      optim_mode="combination", combination_param=0.5, write_scores=False)
-best_q, best_row = max(((q.rsplit("_", 1)[0], df.iloc[0]) for q, df in scores.items()),
-                       key=lambda x: x[1]["tanimoto_combination"])
-print(f"best dopamine conformer: {best_q}   "
-      f"shape={best_row['tanimoto_shape']:.3f} color={best_row['tanimoto_color']:.3f} "
-      f"combo={best_row['tanimoto_combination']:.3f}")
-
-best_mol = dopamine_confs[best_q]
-best_mol.SetProp("_Name", "dopamine_H+")
-calc = Roshambo2(best_mol, dataset, color=True, remove_Hs_before_color_assignment=False,
-                 color_generator=ProjectedPointPharmacophoreGenerator())
-df = next(iter(calc.compute(backend="cuda", reduce_over_conformers=False,
-                            optim_mode="combination", combination_param=0.5,
-                            write_scores=False).values()))
-overlap_color = float(df["overlap_color"].iloc[0])          # top row = best conformer
-
-calc.write_best_fit_structures(hits_sdf_prefix="overlap_hits", top_n=1,
-                               write_color_pseudomols=True, append_query=True,
-                               feature_to_symbol_map=FEATURE_TO_SYMBOL)
-
-# ligand files: keep the exact hydrogens roshambo2 scored (see ligtools) - a
-# fresh AddHs would guess a different phenol O-H rotamer than the one used to
-# place the donor feature, so the drawn O-H would disagree with DonorProj.
-hit_noH = calc.get_best_fit_structures(top_n=1)["dopamine_H+_0"][0]
-k = int(hit_noH.GetProp("name").rsplit("_", 1)[-1])
-with Chem.SDWriter("ligand_dopamine_ovl.sdf") as _w:
-    _w.write(polar_only(best_mol))
-with Chem.SDWriter("ligand_PD128907_ovl.sdf") as _w:
-    _w.write(polar_only(pose_with_H(hit_noH, Chem.Mol(dataset[0], confId=k))))
-
-# ---- 2. read the two feature clouds (same coordinate frame) --------------
-mols = list(Chem.SDMolSupplier("overlap_hits_dopamine_H+_0_color_features.sdf",
-                               removeHs=False, sanitize=False))
-qmol, fmol = mols[0], mols[1]
+dopamine_confs = split(gen(DOPAMINE, "dopamine_H+", N_QUERY_CONFS))
+dataset = [gen(PD128907, "PD128907_H+", N_DATASET_CONFS)]
 
 
-def feats(m):
-    conf = m.GetConformer()
-    return [(a.GetSymbol(), np.array(conf.GetAtomPosition(a.GetIdx())))
-            for a in m.GetAtoms()]
+def best_conformer(color_generator):
+    """25-conformer scan -> (best dopamine conf name, best score row)."""
+    calc = Roshambo2(list(dopamine_confs.values()), dataset, color=True,
+                     remove_Hs_before_color_assignment=False,
+                     conformers_have_unique_names=True,
+                     color_generator=color_generator)
+    scores = calc.compute(backend="cuda", reduce_over_conformers=True,
+                          optim_mode="combination", combination_param=0.5,
+                          write_scores=False)
+    return max(((q.rsplit("_", 1)[0], df.iloc[0]) for q, df in scores.items()),
+               key=lambda x: x[1]["tanimoto_combination"])
 
 
-qf, ff = feats(qmol), feats(fmol)
+def build(tag, color_generator):
+    best_q, row = best_conformer(color_generator)
+    print(f"{tag:<11}{row['tanimoto_shape']:>8.3f}{row['tanimoto_color']:>8.3f}"
+          f"{row['tanimoto_combination']:>8.3f}   (dopamine {best_q})")
 
-# ---- 3. greedy nearest matching within each family ----------------------
-pairs = []
-for sym in set(s for s, _ in qf) & set(s for s, _ in ff):
-    qi = [i for i, (s, _) in enumerate(qf) if s == sym]
-    fi = [j for j, (s, _) in enumerate(ff) if s == sym]
-    cand = sorted(((np.linalg.norm(qf[i][1] - ff[j][1]), i, j)
-                   for i in qi for j in fi), key=lambda x: x[0])
-    used_q, used_f = set(), set()
-    for d, i, j in cand:
-        if i in used_q or j in used_f:
-            continue
-        used_q.add(i); used_f.add(j)
-        fr = np.exp(-d * d / 2.0)
-        if fr >= MIN_OVERLAP:
-            pairs.append(dict(feature=SYMBOL_TO_FEATURE[sym], symbol=sym, d=d,
-                              frac=fr, v=V0 * fr, xyz=0.5 * (qf[i][1] + ff[j][1])))
+    qmol = Chem.Mol(dopamine_confs[best_q])       # copy - don't rename the shared conf
+    qmol.SetProp("_Name", "dopamine_H+")
+    calc = Roshambo2(qmol, dataset, color=True, remove_Hs_before_color_assignment=False,
+                     color_generator=color_generator)
+    df = next(iter(calc.compute(backend="cuda", reduce_over_conformers=False,
+                                optim_mode="combination", combination_param=0.5,
+                                write_scores=False).values()))
+    calc.write_best_fit_structures(hits_sdf_prefix=f"_hits_{tag}", top_n=1,
+                                   write_color_pseudomols=True, append_query=True,
+                                   feature_to_symbol_map=ot.FEATURE_TO_SYMBOL)
 
-pairs.sort(key=lambda p: -p["v"])
-explained = sum(p["v"] for p in pairs)
-print(f"\noverlapping features (f >= {MIN_OVERLAP}):")
-print(f"{'feature':<14}{'dist(A)':>9}{'overlap_frac':>14}{'v_color':>10}")
-for p in pairs:
-    print(f"{p['feature']:<14}{p['d']:>9.2f}{p['frac']:>14.3f}{p['v']:>10.3f}")
-print(f"\nmatched pairs: {len(pairs)}   sum v_color = {explained:.2f} / "
-      f"overlap_color {overlap_color:.2f} "
-      f"({100 * explained / overlap_color:.0f}% of the colour overlap)")
+    pairs = ot.match_overlap(f"_hits_{tag}_dopamine_H+_0_color_features.sdf", MIN_OVERLAP)
+    print(f"           model: {tag}")
+    ot.print_table(pairs, float(df["overlap_color"].iloc[0]))
+    ot.write_model(pairs, f"overlap_model_{tag}.sdf", min_overlap=MIN_OVERLAP)
 
-# ---- 4. write the overlap-only pharmacophore model ---------------------
-rw = Chem.RWMol()
-conf = Chem.Conformer(len(pairs))
-for p in pairs:
-    conf.SetAtomPosition(rw.AddAtom(Chem.Atom(SYMBOL_TO_Z[p["symbol"]])), p["xyz"].tolist())
-out = rw.GetMol()
-out.AddConformer(conf)
-out.SetProp("_Name", "dopamine_x_PD128907_overlap_pharmacophore")
-out.SetProp("min_overlap_fraction", str(MIN_OVERLAP))
-out.SetProp("features", ", ".join(f"{p['feature']}(d={p['d']:.2f})" for p in pairs))
-with Chem.SDWriter("pharmacophore_overlap_model.sdf") as w:
-    w.write(out)
-print("\nwrote pharmacophore_overlap_model.sdf")
+    # context ligands with the exact hydrogens roshambo2 scored
+    hit_noH = calc.get_best_fit_structures(top_n=1)["dopamine_H+_0"][0]
+    k = int(hit_noH.GetProp("name").rsplit("_", 1)[-1])
+    lq, lh = f"ligand_dopamine_{tag}.sdf", f"ligand_PD128907_{tag}.sdf"
+    with Chem.SDWriter(lq) as w:
+        w.write(polar_only(qmol))
+    with Chem.SDWriter(lh) as w:
+        w.write(polar_only(pose_with_H(hit_noH, Chem.Mol(dataset[0], confId=k))))
 
-# ---- 5. PyMOL loader --------------------------------------------------
-with open("overlap_pharmacophore.pml", "w") as fh:
-    fh.write(
-        "# roshambo2 overlap pharmacophore - only the directional features\n"
-        "# shared by dopamine & PD128907 (base points + projected D/A/ring points)\n"
-        "load ligand_dopamine_ovl.sdf, dopamine\n"
-        "load ligand_PD128907_ovl.sdf, PD128907\n"
-        "hide everything, dopamine or PD128907\n"
-        "show sticks, dopamine or PD128907\n"
-        "set stick_radius, 0.1, dopamine or PD128907\n"
-        "set valence, 0\n"
-        "util.cbac dopamine\nutil.cbag PD128907\n"
-        "color grey30, (dopamine or PD128907) and elem H\n"
-        "show spheres, (dopamine or PD128907) and elem H\n"
-        "set sphere_scale, 0.11, (dopamine or PD128907) and elem H\n\n"
-        "load pharmacophore_overlap_model.sdf, pharm\n"
-        "unbond pharm, pharm\n"
-        "show spheres, pharm\n"
-        "set sphere_scale, 0.4, pharm\n"
-        "set sphere_transparency, 0.15, pharm\n"
-        "color slate,     pharm and elem N\n"       # Donor
-        "color firebrick, pharm and elem O\n"       # Acceptor
-        "color orange,    pharm and elem Fe\n"      # PosIonizable
-        "color green,     pharm and elem Cl\n"      # NegIonizable
-        "color yellow,    pharm and elem S\n"       # Aromatic
-        "color grey60,    pharm and elem Br\n"      # Hydrophobe
-        "color deepblue,  pharm and elem F\n"       # DonorProj
-        "color hotpink,   pharm and elem I\n"       # AcceptorProj
-        "color wheat,     pharm and elem B\n"       # AromaticProj
-        "color purple,    pharm and elem P\n"       # PosIonizableProj
-        "python\n"
-        "seen=set()\n"
-        "fams={'N':'Donor','O':'Acceptor','S':'Aromatic','BR':'Hydrophobe',"
-        "'F':'D-proj','I':'A-proj','B':'ring-proj','P':'Pos-proj'}\n"
-        "off={'Donor':(0,1.6,3),'Acceptor':(0,-2.4,3),'Aromatic':(0,0,3),"
-        "'Hydrophobe':(0,2.2,3),'D-proj':(-2.4,0,3),'A-proj':(0,-2.0,3),"
-        "'ring-proj':(2.2,1.2,3),'Pos-proj':(2.4,-1.4,3)}\n"
-        "for at in cmd.get_model('pharm').atom:\n"
-        "    fam=fams.get(at.symbol.upper())\n"
-        "    if fam and fam not in seen:\n"
-        "        seen.add(fam)\n"
-        "        sel=f'pharm and index {at.index}'\n"
-        "        cmd.label(sel, repr(fam)); cmd.set('label_position', off[fam], sel)\n"
-        "python end\n"
-        "set label_size, 15\nset label_color, black\n"
-        "bg_color white\nset orthoscopic, 1\nset ray_shadows, 0\norient\nzoom all, 2.5\n"
-    )
-print("wrote overlap_pharmacophore.pml")
+    ot.write_pml(f"overlap_{tag}.pml", lq, lh, f"overlap_model_{tag}.sdf", pairs,
+                 title=f"dopamine x PD128907 overlapping features - {tag} model")
+    print(f"           wrote overlap_model_{tag}.sdf and overlap_{tag}.pml\n")
+
+
+print(f"dopamine query confs = {N_QUERY_CONFS}, PD128907 dataset confs = {N_DATASET_CONFS}, "
+      f"min overlap fraction = {MIN_OVERLAP}\n")
+print(f"{'model':<11}{'shape':>8}{'color':>8}{'combo':>8}")
+build("stock", None)
+build("projected", ProjectedPointPharmacophoreGenerator())

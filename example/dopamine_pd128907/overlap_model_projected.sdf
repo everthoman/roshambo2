@@ -1,4 +1,4 @@
-dopamine_x_PD128907_overlap_pharmacophore
+overlap_pharmacophore
      RDKit          3D
 
  15  0  0  0  0  0  0  0  0  0999 V2000
@@ -7,21 +7,21 @@ dopamine_x_PD128907_overlap_pharmacophore
    -1.4936   -0.0907    0.4744 S   0  0  0  0  0  0  0  0  0  0  0  0
    -1.0825    1.0252   -0.2677 Br  0  0  0  0  0  0  0  0  0  0  0  0
    -0.1285    0.1879    0.3290 Br  0  0  0  0  0  0  0  0  0  0  0  0
-   -3.4015    1.5155   -0.6824 O   0  0  0  0  0  0  0  0  0  0  0  0
    -3.4015    1.5155   -0.6824 N   0  0  0  0  0  0  0  0  0  0  0  0
+   -3.4015    1.5155   -0.6824 O   0  0  0  0  0  0  0  0  0  0  0  0
    -1.3900   -2.0612   -2.4141 B   0  0  0  0  0  0  0  0  0  0  0  0
    -5.2652    2.4840    1.4452 I   0  0  0  0  0  0  0  0  0  0  0  0
    -2.1443    3.8677   -2.0392 F   0  0  0  0  0  0  0  0  0  0  0  0
     3.5153   -0.4363   -0.5575 N   0  0  0  0  0  0  0  0  0  0  0  0
     3.5153   -0.4363   -0.5575 Fe  0  0  0  0  0 15  0  0  0  0  0  0
    -4.9258   -0.0915   -2.6882 I   0  0  0  0  0  0  0  0  0  0  0  0
-    4.1669   -1.5833   -3.0690 P   0  0  0  0  0  0  0  0  0  0  0  0
     4.1669   -1.5833   -3.0690 F   0  0  0  0  0  0  0  0  0  0  0  0
+    4.1669   -1.5833   -3.0690 P   0  0  0  0  0  0  0  0  0  0  0  0
 M  END
 >  <min_overlap_fraction>  (1) 
 0.15
 
 >  <features>  (1) 
-AromaticProj(d=0.08), Hydrophobe(d=0.08), Aromatic(d=0.17), Hydrophobe(d=0.26), Hydrophobe(d=0.26), Acceptor(d=0.31), Donor(d=0.31), AromaticProj(d=0.40), AcceptorProj(d=0.42), DonorProj(d=0.51), Donor(d=0.66), PosIonizable(d=0.66), AcceptorProj(d=0.83), PosIonizableProj(d=1.56), DonorProj(d=1.56)
+AromaticProj(d=0.08), Hydrophobe(d=0.08), Aromatic(d=0.17), Hydrophobe(d=0.26), Hydrophobe(d=0.26), Donor(d=0.31), Acceptor(d=0.31), AromaticProj(d=0.40), AcceptorProj(d=0.42), DonorProj(d=0.51), Donor(d=0.66), PosIonizable(d=0.66), AcceptorProj(d=0.83), DonorProj(d=1.56), PosIonizableProj(d=1.56)
 
 $$$$
