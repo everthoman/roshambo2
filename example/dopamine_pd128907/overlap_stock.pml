@@ -1,6 +1,6 @@
-# dopamine x PD128907 overlapping features - stock model
-load ligand_dopamine_stock.sdf, query
-load ligand_PD128907_stock.sdf, hit
+# PD128907 (template) x dopamine overlapping features - stock model
+load ligand_PD128907_stock.sdf, query
+load ligand_dopamine_stock.sdf, hit
 hide everything, query or hit
 show sticks, query or hit
 set stick_radius, 0.10, query or hit
@@ -17,9 +17,9 @@ show spheres, pharm
 set sphere_scale, 0.40, pharm
 set sphere_transparency, 0.15, pharm
 color yellow, pharm and elem S
+color grey60, pharm and elem Br
 color orange, pharm and elem Fe
 color slate, pharm and elem N
-color grey60, pharm and elem Br
 color firebrick, pharm and elem O
 python
 lab = {'N': 'Donor', 'O': 'Acceptor', 'FE': 'Pos', 'CL': 'Neg', 'S': 'Aromatic', 'BR': 'Hydrophobe', 'F': 'D-proj', 'I': 'A-proj', 'B': 'ring-proj', 'P': 'Pos-proj'}
