@@ -19,7 +19,7 @@ overlap** are output/rendered.
 | `overlaptools.py` | `conformer_ensemble` (≤ E-window MMFF confs, polar-H RMS prune), feature-point extraction, overlap matching, model SDF + PyMOL loader, `add_tversky` (importable) |
 | `ligtools.py` | `pose_with_H` (put the *scored* hydrogens on the aligned pose) + `polar_only` (importable) |
 | `overlap_pharmacophore.py` | **the script** — every ≤ 5 kcal/mol conformer of both molecules, all pairwise alignments, ranked by score − strain penalty; builds the overlap-only model for the **stock** and the **projected** colour model, renders both |
-| `consensus_pharmacophore.py` | multi-ligand: aligns 6 dopaminergic agonists to the most rigid one (apomorphine), clusters feature points, keeps those seen in ≥ N ligands |
+| `consensus_pharmacophore.py` | multi-ligand: ≤ 5 kcal/mol conformers of 6 dopaminergic agonists, strain-weighted alignment to the most rigid one (apomorphine), cluster feature points, keep those seen in ≥ N ligands |
 | `conf_scan.py` | conformer-count sweep for the projected model |
 
 ## Run
@@ -81,22 +81,24 @@ scores enough better to pay for itself.
 
 ### Consensus of 6 agonists (`consensus_pharmacophore.py`)
 
-Ligands (neutral SMILES) come from `dopamine_ligands.txt`; the basic amine of
-each is protonated. roshambo2 aligns only pairwise, so: pick the most rigid
-ligand (apomorphine), roshambo2-align the other five to it, then cluster
-same-family feature points and keep clusters present in ≥ 4/6 ligands.
+Ligands (neutral SMILES) from `dopamine_ligands.txt`, basic amine protonated.
+roshambo2 aligns only pairwise, so: most rigid ligand (apomorphine) = frame;
+for each other ligand, align every ≤ 5 kcal/mol conformer to it and keep the
+pose maximising `score − 0.05·dE`; then cluster feature points, keep clusters in
+≥ 4/6 ligands. (R-7-OH-DPAT is placed with a 0.9 kcal/mol conformer — it aligns
+enough better to pay the penalty; the rest use their global minimum.)
 
-13 consensus points — the classic aminergic layout:
+**10 consensus points:**
 
-- **protonated amine** (`PosIonizable`, 4/6)
 - **aromatic ring** — `Aromatic` + ring-normal projected + `Hydrophobe`, 6/6
-- **ring hydroxyl** — `Acceptor` / `Donor` and their projected points, 4–5/6
+- **ring hydroxyl** — `Acceptor` / `Donor` and projected points, 4–5/6
 
-Only `PosIonizableProj` stays below threshold: the amine *position* is shared
-but its N–H points different ways across the scaffolds, so the salt-bridge
-*vector* does not cluster. (With less accurate input structures even
-`PosIonizable` misses — shape+colour overlay pins the large ring systems more
-tightly than the amine.)
+`PosIonizable` and `PosIonizableProj` now fall below threshold. With conformers
+restricted to ≤ 5 kcal/mol the protonated amines no longer land in a common
+place — the earlier "amine 4/6" consensus needed strained conformers to get the
+nitrogens onto apomorphine's. Shape + colour overlay pins the large shared ring
+system far more tightly than the amine; anchoring the amine wants a
+pharmacophore- or field-based alignment.
 
 ### Conformer count (`conf_scan.py`, projected model)
 

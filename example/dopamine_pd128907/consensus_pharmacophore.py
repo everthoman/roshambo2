@@ -2,15 +2,20 @@
 
 roshambo2 only aligns pairwise, so a multi-ligand model is built on top:
 
-  1. pick the most rigid ligand as the reference (its lowest-MMFF-energy conformer)
-  2. roshambo2-align every other ligand's conformers to that reference, keep the
-     best-scoring pose (ProjectedPointPharmacophoreGenerator colour model)
-  3. run the pharmacophore generator on every aligned ligand
+  1. pick the most rigid ligand as the reference; its global-minimum conformer
+     defines the frame
+  2. for every other ligand, roshambo2-align every MMFF conformer within
+     E_WINDOW kcal/mol of its own minimum to the reference, and keep the pose
+     that maximises  score - ENERGY_LAMBDA * dE_conformer  (so a strained
+     conformer is only used if it aligns enough better to pay for itself)
+  3. run the projected pharmacophore generator on every aligned ligand
   4. cluster same-family feature points across all ligands; a cluster seen in
      >= MIN_LIGANDS of them becomes a consensus point at its centroid
 
 Ligands are read from dopamine_ligands.txt (one "name SMILES" per line, neutral);
 the basic amine of each is protonated before use.
+
+    python consensus_pharmacophore.py [min_ligands] [tversky_alpha] [energy_lambda]
 
 Outputs (cwd):
   consensus_model.sdf              the consensus points
@@ -23,14 +28,14 @@ from collections import defaultdict
 
 import numpy as np
 from rdkit import Chem
-from rdkit.Chem import rdDistGeom, rdForceFieldHelpers, rdMolDescriptors
+from rdkit.Chem import rdMolDescriptors
 from roshambo2 import Roshambo2
 from projected_pharmacophore import ProjectedPointPharmacophoreGenerator
 from ligtools import pose_with_H, polar_only
 import overlaptools as ot
 
 LIGAND_FILE = os.path.join(os.path.dirname(__file__), "dopamine_ligands.txt")
-N_CONFS = 50
+E_WINDOW = 5.0                                         # kcal/mol
 CLUSTER_RADIUS = 1.6                                   # Angstrom
 
 # trivalent neutral N, not amide / amidine / N-oxide / N-N / aniline
@@ -62,40 +67,30 @@ for line in open(LIGAND_FILE):
 N = len(LIGANDS)
 MIN_LIGANDS = int(sys.argv[1]) if len(sys.argv) > 1 else max(2, round(0.6 * N))
 # alpha->1: align each ligand by how well it *covers the reference* (Tversky /
-# "fit"), so a small ligand snaps onto the relevant sub-region instead of being
-# penalised for the reference's extra bulk. None -> symmetric combo Tanimoto.
+# "fit") - the reference is the larger, rigid partner here. None -> Tanimoto.
 TVERSKY = float(sys.argv[2]) if len(sys.argv) > 2 else 0.95
+ENERGY_LAMBDA = float(sys.argv[3]) if len(sys.argv) > 3 else 0.05   # score / kcal/mol
 RANK = "tversky_combo" if TVERSKY else "tanimoto_combination"
 
 cg = ProjectedPointPharmacophoreGenerator()
-idx2fam = cg.get_index_to_feature()
 
-
-def prep(smiles, name):
-    m = Chem.AddHs(Chem.MolFromSmiles(smiles))
-    p = rdDistGeom.ETKDGv3()
-    p.randomSeed = 0xF00D
-    rdDistGeom.EmbedMultipleConfs(m, numConfs=N_CONFS, params=p)
-    ff = rdForceFieldHelpers.MMFFOptimizeMoleculeConfs(m)
-    m.SetProp("_Name", name)
-    return m, [e for _, e in ff]
-
-
-mols = {name: prep(smi, name) for name, smi in LIGANDS.items()}
+# every ligand: MMFF conformers within E_WINDOW kcal/mol of its own minimum
+ensembles = {name: ot.conformer_ensemble(smi, name, E_WINDOW)
+             for name, smi in LIGANDS.items()}
 
 ref_name = min(LIGANDS, key=lambda n: rdMolDescriptors.CalcNumRotatableBonds(
     Chem.MolFromSmiles(LIGANDS[n])))
-ref_mol, ref_e = mols[ref_name]
-ref_ci = int(np.argmin(ref_e))
-ref_single = Chem.Mol(ref_mol, confId=ref_ci)
+ref_mol, _ = ensembles[ref_name]
+ref_single = Chem.Mol(ref_mol, confId=ref_mol.GetConformer(0).GetId())   # global min
 ref_single.SetProp("_Name", ref_name)
 mode = f"Tversky alpha={TVERSKY}" if TVERSKY else "combo Tanimoto"
-print(f"reference = {ref_name} (conf {ref_ci});  align by {mode};  "
+print(f"reference = {ref_name} ({len(ensembles[ref_name][1])} confs <= {E_WINDOW} "
+      f"kcal/mol, global min as frame);  align by {mode} - {ENERGY_LAMBDA}/kcal;  "
       f"consensus needs >= {MIN_LIGANDS}/{N} ligands\n")
 
 # ---- 1-2. align every ligand into the reference frame -----------------------
 aligned = {ref_name: ref_single}
-for name, (m, _) in mols.items():
+for name, (m, dE) in ensembles.items():
     if name == ref_name:
         continue
     calc = Roshambo2(ref_single, [m], color=True,
@@ -105,14 +100,16 @@ for name, (m, _) in mols.items():
                                 write_scores=False).values()))
     if TVERSKY:
         df = ot.add_tversky(df, alpha=TVERSKY)
-    df = df.sort_values(RANK, ascending=False).reset_index(drop=True)
-    row = df.iloc[0]
+    df["_conf"] = df["name"].str.rsplit("_", n=1).str[-1].astype(int)
+    df["_adjusted"] = df[RANK] - ENERGY_LAMBDA * df["_conf"].map(lambda i: dE[i])
+    row = df.sort_values("_adjusted", ascending=False).iloc[0]
+    k = int(row["_conf"])
     poses = {p.GetProp("name"): p for p in calc.get_best_fit_structures()[f"{ref_name}_0"]}
-    k = int(row["name"].rsplit("_", 1)[-1])
-    aligned[name] = pose_with_H(poses[row["name"]], Chem.Mol(m, confId=k))
+    aligned[name] = pose_with_H(poses[row["name"]],
+                                Chem.Mol(m, confId=m.GetConformer(k).GetId()))
     tv = f" tversky={row['tversky_combo']:.2f}" if TVERSKY else ""
-    print(f"  aligned {name:12}  shape={row['tanimoto_shape']:.2f} "
-          f"color={row['tanimoto_color']:.2f} combo={row['tanimoto_combination']:.2f}{tv}")
+    print(f"  aligned {name:12}  combo={row['tanimoto_combination']:.2f}{tv}"
+          f"  dE={dE[k]:.1f}  adjusted={row['_adjusted']:.2f}")
 
 # ---- 3. feature points for every aligned ligand ---------------------------
 by_family = defaultdict(list)                         # family -> [(ligand, xyz), ...]

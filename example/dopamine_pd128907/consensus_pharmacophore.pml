@@ -46,7 +46,6 @@ color firebrick, pharm and elem O
 color slate, pharm and elem N
 color hotpink, pharm and elem I
 color deepblue, pharm and elem F
-color orange, pharm and elem Fe
 python
 lab = {'N': 'Donor', 'O': 'Acceptor', 'FE': 'Pos', 'CL': 'Neg', 'S': 'Aromatic', 'BR': 'Hydrophobe', 'F': 'D-proj', 'I': 'A-proj', 'B': 'ring-proj', 'P': 'Pos-proj'}
 seen = set()
