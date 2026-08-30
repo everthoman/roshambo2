@@ -1,0 +1,24 @@
+dopaminergic_consensus_pharmacophore
+     RDKit          3D
+
+ 12  0  0  0  0  0  0  0  0  0999 V2000
+    2.8105   -1.0486    0.0366 S   0  0  0  0  0  0  0  0  0  0  0  0
+    2.0288   -1.2515    3.4198 B   0  0  0  0  0  0  0  0  0  0  0  0
+    0.1402    0.0656   -0.1789 Br  0  0  0  0  0  0  0  0  0  0  0  0
+    4.7656   -0.2373    0.4542 O   0  0  0  0  0  0  0  0  0  0  0  0
+    2.2036    2.3635    2.7808 I   0  0  0  0  0  0  0  0  0  0  0  0
+    3.3489    3.0136   -1.8709 I   0  0  0  0  0  0  0  0  0  0  0  0
+    3.4406   -1.1325   -3.4135 B   0  0  0  0  0  0  0  0  0  0  0  0
+    4.7656   -0.2373    0.4542 N   0  0  0  0  0  0  0  0  0  0  0  0
+    5.3846    0.3106    3.1590 I   0  0  0  0  0  0  0  0  0  0  0  0
+    6.5039    0.7334   -1.5425 I   0  0  0  0  0  0  0  0  0  0  0  0
+    3.6677    1.2168    0.4442 N   0  0  0  0  0  0  0  0  0  0  0  0
+    6.6602    1.0205    0.9074 F   0  0  0  0  0  0  0  0  0  0  0  0
+M  END
+>  <features>  (1) 
+Aromatic(d=0.00), AromaticProj(d=0.00), Hydrophobe(d=0.00), Acceptor(d=0.00), AcceptorProj(d=0.00), AcceptorProj(d=0.00), AromaticProj(d=0.00), Donor(d=0.00), AcceptorProj(d=0.00), AcceptorProj(d=0.00), Donor(d=0.00), DonorProj(d=0.00)
+
+>  <ligand_counts>  (1) 
+Aromatic=6, AromaticProj=6, Hydrophobe=6, Acceptor=5, AcceptorProj=5, AcceptorProj=5, AromaticProj=5, Donor=5, AcceptorProj=4, AcceptorProj=4, Donor=4, DonorProj=4
+
+$$$$

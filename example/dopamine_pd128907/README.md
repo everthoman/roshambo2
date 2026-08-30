@@ -11,6 +11,7 @@ points that **actually overlap** between the two molecules are output/rendered.
 | `overlaptools.py` | keep only the query↔hit feature pairs whose Gaussian overlap fraction `exp(-d²/2) ≥ min_overlap`; write the model SDF + PyMOL loader (importable) |
 | `ligtools.py` | `pose_with_H` (put the *scored* hydrogens on the aligned pose) + `polar_only` (importable) |
 | `overlap_pharmacophore.py` | **the script** — samples 25 dopamine confs, keeps the best, builds the overlap-only model for the **stock** and the **projected** colour model, renders both |
+| `consensus_pharmacophore.py` | multi-ligand: aligns 6 dopaminergic agonists to the most rigid one (apomorphine), clusters feature points, keeps those seen in ≥ N ligands |
 | `conf_scan.py` | conformer-count sweep for the projected model |
 
 ## Run
@@ -43,6 +44,20 @@ AromaticProj `B` wheat · PosIonizableProj `P` purple.
 Projected points lower the *combined* colour Tanimoto — dopamine and PD128907
 only partly agree on feature *direction*, not just position. The `PosIonizableProj`
 salt-bridge vector and one `DonorProj` are the weak links (d ≈ 1.6 Å).
+
+### Consensus of 6 agonists (`consensus_pharmacophore.py`)
+
+roshambo2 aligns only pairwise, so: pick the most rigid ligand (apomorphine),
+roshambo2-align the other five to it, then cluster same-family feature points
+and keep clusters present in ≥ 4/6 ligands.
+
+- **Consensus** (all/most ligands): the aromatic ring (Aromatic + ring-normal
+  projected + hydrophobe, 6/6) and one ring-hydroxyl acceptor/donor (4–5/6).
+- **No consensus**: `PosIonizable` / `PosIonizableProj`. Shape+colour overlay
+  lines up the large shared ring systems but does not pin the protonated amine,
+  so the basic nitrogens scatter across these diverse scaffolds. This is why
+  aminergic pharmacophores are usually built by anchoring on the charged centre
+  (pharmacophore- or field-based alignment) rather than pure shape.
 
 ### Conformer count (`conf_scan.py`, projected model)
 
