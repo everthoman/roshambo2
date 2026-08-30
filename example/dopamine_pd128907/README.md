@@ -8,7 +8,7 @@ points that **actually overlap** between the two molecules are output/rendered.
 |---|---|
 | `roshambo_dopamine.py` | minimal overlay — prints the score, no files |
 | `projected_pharmacophore.py` | `ProjectedPointPharmacophoreGenerator`: adds ROCS-style projected donor / acceptor lone-pair / ring-normal / cation points so colour scoring rewards H-bond & stacking **direction** (importable) |
-| `overlaptools.py` | keep only the query↔hit feature pairs whose Gaussian overlap fraction `exp(-d²/2) ≥ min_overlap`; write the model SDF + PyMOL loader (importable) |
+| `overlaptools.py` | feature-point extraction, overlap matching (`exp(-d²/2) ≥ min_overlap`), model SDF + PyMOL loader, and `add_tversky` for partial / "fit" scoring (importable) |
 | `ligtools.py` | `pose_with_H` (put the *scored* hydrogens on the aligned pose) + `polar_only` (importable) |
 | `overlap_pharmacophore.py` | **the script** — samples 25 dopamine confs, keeps the best, builds the overlap-only model for the **stock** and the **projected** colour model, renders both |
 | `consensus_pharmacophore.py` | multi-ligand: aligns 6 dopaminergic agonists to the most rigid one (apomorphine), clusters feature points, keeps those seen in ≥ N ligands |
@@ -19,10 +19,22 @@ points that **actually overlap** between the two molecules are output/rendered.
 ```
 python overlap_pharmacophore.py            # min_overlap 0.15 (d ≤ ~1.95 Å)
 python overlap_pharmacophore.py 0.30       # stricter
+python overlap_pharmacophore.py 0.15 0.95  # rank/select by Tversky (partial match)
 
 pymol overlap_stock.pml                    # 8 shared features, stock model
 pymol overlap_projected.pml                # 15 shared features, directional model
 ```
+
+**Partial matching (Tversky / "fit")** — `overlaptools.add_tversky(df, alpha)`
+computes `O_AB / (alpha·O_AA + (1-alpha)·O_BB)` from the overlap + self-overlap
+columns roshambo2 already returns. `alpha → 1` scores *how well the query is
+covered*, ignoring the hit's extra bulk — so a small query / fragment can match a
+sub-region of a bigger molecule without a Tanimoto penalty. Pass it as the 2nd
+arg to `overlap_pharmacophore.py`; `consensus_pharmacophore.py` uses `alpha=0.95`
+by default so each ligand snaps onto the relevant part of the (rigid) reference.
+roshambo2's own optimiser already maximises raw overlap, so it aligns
+partial-friendly regardless — Tversky only changes which pose/conformer is
+*picked* and *reported*.
 
 Outputs: `overlap_model_{stock,projected}.sdf` (the models),
 `overlap_{stock,projected}.{pml,png}` (renders),

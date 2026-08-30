@@ -17,8 +17,8 @@ show spheres, pharm
 set sphere_scale, 0.40, pharm
 set sphere_transparency, 0.15, pharm
 color yellow, pharm and elem S
-color slate, pharm and elem N
 color orange, pharm and elem Fe
+color slate, pharm and elem N
 color grey60, pharm and elem Br
 color firebrick, pharm and elem O
 python

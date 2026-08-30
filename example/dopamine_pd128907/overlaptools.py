@@ -17,6 +17,28 @@ from rdkit import Chem
 
 V0 = (np.pi / 2) ** 1.5
 
+
+def add_tversky(df, alpha=0.95, mixing=0.5):
+    """Add reference-Tversky ("fit"/partial-match) columns to a roshambo2 score
+    frame. alpha weights the *query* self-overlap: alpha->1 = "how much of the
+    query is covered", ignoring the hit's extra bulk (so a small query can match
+    a sub-region of a big molecule without a Tanimoto penalty). alpha=0.5 with
+    equal terms would reduce to Tanimoto.
+
+        Tv = O_AB / (alpha * O_AA + (1 - alpha) * O_BB)
+    """
+    df = df.copy()
+    df["tversky_shape"] = df["overlap_volume"] / (
+        alpha * df["self_overlap_volume_query"]
+        + (1 - alpha) * df["self_overlap_volume_fit"])
+    if "overlap_color" in df.columns:
+        qc = df["self_overlap_color_query"].where(df["self_overlap_color_query"] > 0)
+        df["tversky_color"] = (df["overlap_color"] /
+                               (alpha * qc + (1 - alpha) * df["self_overlap_color_fit"])
+                               ).fillna(0.0)
+        df["tversky_combo"] = (1 - mixing) * df["tversky_shape"] + mixing * df["tversky_color"]
+    return df
+
 # feature family -> (element used in the SDF, PyMOL colour, short label)
 FAMILY = {
     "Donor":            ("N",  "slate",     "Donor"),
@@ -36,23 +58,27 @@ _Z = {"N": 7, "O": 8, "Fe": 26, "Cl": 17, "S": 16, "Br": 35,
       "F": 9, "I": 53, "B": 5, "P": 15}
 
 
-def _points(mol):
-    conf = mol.GetConformer()
-    return [(a.GetSymbol(), np.array(conf.GetAtomPosition(a.GetIdx())))
-            for a in mol.GetAtoms()]
+def feature_points(mol, color_generator=None):
+    """[(family, xyz), ...] for an RDKit mol (needs its polar H for the donor /
+    cation projected points). color_generator=None -> roshambo2's default."""
+    if color_generator is None:
+        from roshambo2.pharmacophore import PharmacophoreGenerator
+        color_generator = PharmacophoreGenerator()
+    coords, types = color_generator.generate_color_atoms(mol)
+    i2f = color_generator.get_index_to_feature()
+    return [(i2f[int(t)], np.asarray(xyz, float)) for xyz, t in zip(coords, types)]
 
 
-def match_overlap(color_features_sdf, min_overlap=0.15):
-    """color_features_sdf: the *_color_features.sdf written by roshambo2 with
-    write_color_pseudomols=True + append_query=True (entry 0 = query, 1 = hit).
-    Returns a list of pair dicts sorted by contribution, most first."""
-    q, h = list(Chem.SDMolSupplier(color_features_sdf, removeHs=False, sanitize=False))[:2]
-    qf, hf = _points(q), _points(h)
+def match_overlap(qpts, hpts, min_overlap=0.15):
+    """qpts, hpts: [(family, xyz), ...] for query and aligned hit (same frame).
+    Greedy nearest 1:1 match within each family; keep pairs with overlap
+    fraction exp(-d²/2) >= min_overlap. Returns pair dicts, biggest first."""
     pairs = []
-    for sym in {s for s, _ in qf} & {s for s, _ in hf}:
-        qi = [i for i, (s, _) in enumerate(qf) if s == sym]
-        hi = [j for j, (s, _) in enumerate(hf) if s == sym]
-        cand = sorted(((float(np.linalg.norm(qf[i][1] - hf[j][1])), i, j)
+    fams = {f for f, _ in qpts} & {f for f, _ in hpts}
+    for fam in fams:
+        qi = [i for i, (f, _) in enumerate(qpts) if f == fam]
+        hi = [j for j, (f, _) in enumerate(hpts) if f == fam]
+        cand = sorted(((float(np.linalg.norm(qpts[i][1] - hpts[j][1])), i, j)
                        for i in qi for j in hi), key=lambda x: x[0])
         uq, uh = set(), set()
         for d, i, j in cand:
@@ -61,8 +87,9 @@ def match_overlap(color_features_sdf, min_overlap=0.15):
             uq.add(i); uh.add(j)
             fr = float(np.exp(-d * d / 2.0))
             if fr >= min_overlap:
-                pairs.append(dict(feature=SYMBOL_TO_FEATURE[sym], symbol=sym, d=d,
-                                  frac=fr, v=V0 * fr, xyz=0.5 * (qf[i][1] + hf[j][1])))
+                pairs.append(dict(feature=fam, symbol=FEATURE_TO_SYMBOL[fam], d=d,
+                                  frac=fr, v=V0 * fr,
+                                  xyz=0.5 * (qpts[i][1] + hpts[j][1])))
     pairs.sort(key=lambda p: -p["v"])
     return pairs
 

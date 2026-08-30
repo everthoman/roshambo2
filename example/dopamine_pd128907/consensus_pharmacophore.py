@@ -61,6 +61,11 @@ for line in open(LIGAND_FILE):
 
 N = len(LIGANDS)
 MIN_LIGANDS = int(sys.argv[1]) if len(sys.argv) > 1 else max(2, round(0.6 * N))
+# alpha->1: align each ligand by how well it *covers the reference* (Tversky /
+# "fit"), so a small ligand snaps onto the relevant sub-region instead of being
+# penalised for the reference's extra bulk. None -> symmetric combo Tanimoto.
+TVERSKY = float(sys.argv[2]) if len(sys.argv) > 2 else 0.95
+RANK = "tversky_combo" if TVERSKY else "tanimoto_combination"
 
 cg = ProjectedPointPharmacophoreGenerator()
 idx2fam = cg.get_index_to_feature()
@@ -84,7 +89,9 @@ ref_mol, ref_e = mols[ref_name]
 ref_ci = int(np.argmin(ref_e))
 ref_single = Chem.Mol(ref_mol, confId=ref_ci)
 ref_single.SetProp("_Name", ref_name)
-print(f"reference = {ref_name} (conf {ref_ci});  consensus needs >= {MIN_LIGANDS}/{N} ligands\n")
+mode = f"Tversky alpha={TVERSKY}" if TVERSKY else "combo Tanimoto"
+print(f"reference = {ref_name} (conf {ref_ci});  align by {mode};  "
+      f"consensus needs >= {MIN_LIGANDS}/{N} ligands\n")
 
 # ---- 1-2. align every ligand into the reference frame -----------------------
 aligned = {ref_name: ref_single}
@@ -93,21 +100,25 @@ for name, (m, _) in mols.items():
         continue
     calc = Roshambo2(ref_single, [m], color=True,
                      remove_Hs_before_color_assignment=False, color_generator=cg)
-    row = next(iter(calc.compute(backend="cuda", reduce_over_conformers=False,
-                                 optim_mode="combination", combination_param=0.5,
-                                 write_scores=False).values())).iloc[0]
-    hit_noH = calc.get_best_fit_structures(top_n=1)[f"{ref_name}_0"][0]
-    k = int(hit_noH.GetProp("name").rsplit("_", 1)[-1])
-    aligned[name] = pose_with_H(hit_noH, Chem.Mol(m, confId=k))
+    df = next(iter(calc.compute(backend="cuda", reduce_over_conformers=False,
+                                optim_mode="combination", combination_param=0.5,
+                                write_scores=False).values()))
+    if TVERSKY:
+        df = ot.add_tversky(df, alpha=TVERSKY)
+    df = df.sort_values(RANK, ascending=False).reset_index(drop=True)
+    row = df.iloc[0]
+    poses = {p.GetProp("name"): p for p in calc.get_best_fit_structures()[f"{ref_name}_0"]}
+    k = int(row["name"].rsplit("_", 1)[-1])
+    aligned[name] = pose_with_H(poses[row["name"]], Chem.Mol(m, confId=k))
+    tv = f" tversky={row['tversky_combo']:.2f}" if TVERSKY else ""
     print(f"  aligned {name:12}  shape={row['tanimoto_shape']:.2f} "
-          f"color={row['tanimoto_color']:.2f} combo={row['tanimoto_combination']:.2f}")
+          f"color={row['tanimoto_color']:.2f} combo={row['tanimoto_combination']:.2f}{tv}")
 
 # ---- 3. feature points for every aligned ligand ---------------------------
 by_family = defaultdict(list)                         # family -> [(ligand, xyz), ...]
 for name, mol in aligned.items():
-    coords, types = cg.generate_color_atoms(mol)
-    for xyz, t in zip(coords, types):
-        by_family[idx2fam[int(t)]].append((name, np.asarray(xyz, float)))
+    for fam, xyz in ot.feature_points(mol, cg):
+        by_family[fam].append((name, xyz))
 
 # ---- 4. cluster within each family, keep the consensus ones ---------------
 consensus = []
